@@ -1,5 +1,6 @@
 import { Response, Request } from "express";
 import { config } from "../config.js";
+import { BadRequestError } from "./errors.js";
 
 export async function handlerMetrics(_: Request, res: Response) {
     res.set("Content-Type", "text/html; charset=utf-8");
@@ -25,9 +26,7 @@ export async function handlerReset(_: Request, res: Response) {
 export async function handlerValidate(req: Request, res: Response) {
     const params: { body: string } = req.body;
     if (params.body.length > 140) {
-        res.header("Content-Type", "application/json");
-        res.status(400).send({ error: "Chirp is too long" });
-        return;
+        throw new BadRequestError("Chirp is too long. Max length is 140");
     }
 
     const words = params.body.split(" ");
