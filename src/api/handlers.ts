@@ -1,13 +1,14 @@
 import { Response, Request } from "express";
 import { config } from "../config.js";
-import { BadRequestError } from "./errors.js";
+import { BadRequestError, ForbiddenError } from "./errors.js";
+import { createUser, deleteUsers } from "../db/queries/users.js";
 
 export async function handlerMetrics(_: Request, res: Response) {
     res.set("Content-Type", "text/html; charset=utf-8");
     res.send(`<html>
     <body>
         <h1>Welcome, Chirpy Admin</h1>
-        <p>Chirpy has been visited ${config.fileserverHits} times!</p>
+        <p>Chirpy has been visited ${config.api.fileserverHits} times!</p>
     </body>
 </html>`);
 }
@@ -18,7 +19,11 @@ export async function handlerReadiness(_: Request, res: Response) {
 }
 
 export async function handlerReset(_: Request, res: Response) {
-    config.fileserverHits = 0;
+    if(config.api.platform !== "dev") {
+        throw new ForbiddenError("Reset is onbly allowed in dev environment.");
+    }
+    config.api.fileserverHits = 0;
+    await deleteUsers();
     res.write("Hits reset to 0");
     res.end();
 }
@@ -39,4 +44,24 @@ export async function handlerValidate(req: Request, res: Response) {
 
     res.header("Content-Type", "application/json");
     res.status(200).send({ cleanedBody: cleanedBody });
+}
+
+export async function handlerAddUser(req: Request, res: Response) {
+    const params: { email: string } = req.body;
+    if (!params.email) {
+        throw new BadRequestError("Missing required field");
+    }
+
+    const user = await createUser({ email: params.email });
+    if (!user) {
+        throw new Error("Could not create user");
+    }
+
+    res.header("Content-Type", "application/json");
+    res.status(201).send({ 
+        id: user.id,
+        email: user.email,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+    });
 }
