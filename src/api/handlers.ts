@@ -1,8 +1,10 @@
 import { Response, Request } from "express";
 import { config } from "../config.js";
-import { BadRequestError, ForbiddenError, NotFoundError } from "./errors.js";
-import { createUser, deleteUsers } from "../db/queries/users.js";
+import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors.js";
+import { createUser, deleteUsers, getUserByEmail } from "../db/queries/users.js";
 import { createChirp, getChirpById, getChirps } from "../db/queries/chirps.js";
+import { NewUser } from "src/db/schema.js";
+import { checkPassowrdHash, hashPassword } from "./auth.js";
 
 export async function handlerMetrics(_: Request, res: Response) {
     res.set("Content-Type", "text/html; charset=utf-8");
@@ -83,12 +85,12 @@ export async function handlerGetChirpById(req: Request, res: Response, chirpId: 
 }
 
 export async function handlerAddUser(req: Request, res: Response) {
-    const params: { email: string } = req.body;
+    const params: { email: string, password: string } = req.body;
     if (!params.email) {
         throw new BadRequestError("Missing required field");
     }
 
-    const user = await createUser({ email: params.email });
+    const user: Omit<NewUser, "hashedPassword"> = await createUser({ email: params.email, hashedPassword: await hashPassword(params.password) });
     if (!user) {
         throw new Error("Could not create user");
     }
@@ -100,4 +102,24 @@ export async function handlerAddUser(req: Request, res: Response) {
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
     });
+}
+
+export async function handlerLogin(req: Request, res: Response) {
+    const params: { email: string, password: string } = req.body;
+    if (!params.email || !params.password) {
+        throw new BadRequestError("Missing required fields")
+    }
+
+    const user  = await getUserByEmail(params.email);
+    if (!user || await checkPassowrdHash(params.password, user.hashedPassword) === false) {
+        throw new UnauthorizedError("incorrect email or password");
+    }
+
+    res.header("Content-Type", "application/json");
+    res.status(200).send({
+        id: user.id,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        email: user.email
+    })
 }
