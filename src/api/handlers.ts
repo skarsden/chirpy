@@ -4,7 +4,7 @@ import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } fro
 import { createUser, deleteUsers, getUserByEmail } from "../db/queries/users.js";
 import { createChirp, getChirpById, getChirps } from "../db/queries/chirps.js";
 import { NewUser } from "src/db/schema.js";
-import { checkPassowrdHash, hashPassword } from "./auth.js";
+import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, validateJWT } from "./auth.js";
 
 export async function handlerMetrics(_: Request, res: Response) {
     res.set("Content-Type", "text/html; charset=utf-8");
@@ -32,13 +32,16 @@ export async function handlerReset(_: Request, res: Response) {
 }
 
 export async function handlerAddChirp(req: Request, res: Response) {
-    const params: { body: string, userId: string } = req.body;
-    if (!params.body || !params.userId) {
+    const params: { body: string } = req.body;
+    if (!params.body) {
         throw new BadRequestError("Missing required field");
     }
     if (params.body.length > 140) {
         throw new BadRequestError("Chirp is too long. Max length is 140");
     }
+
+    const token = getBearerToken(req);
+    const userId = validateJWT(token, config.jwt.secret);
 
     const words = params.body.split(" ");
     for (let i = 0; i < words.length; i++) {
@@ -48,9 +51,13 @@ export async function handlerAddChirp(req: Request, res: Response) {
     }
     const cleanedBody = words.join(" ");
 
-    const chirp = await createChirp({ body: cleanedBody, userId: params.userId});
+    const chirp = await createChirp({ body: cleanedBody, userId: userId });
     if (!chirp) {
         throw new Error("Could not create chirp");
+    }
+
+    if(!validateJWT(token, config.jwt.secret)) {
+        throw new UnauthorizedError("Incorrent token");
     }
 
     res.header("Content-Type", "application/json");
@@ -105,21 +112,25 @@ export async function handlerAddUser(req: Request, res: Response) {
 }
 
 export async function handlerLogin(req: Request, res: Response) {
-    const params: { email: string, password: string } = req.body;
+    const params: { email: string, password: string, expiresInSeconds?: number } = req.body;
     if (!params.email || !params.password) {
         throw new BadRequestError("Missing required fields")
     }
 
     const user  = await getUserByEmail(params.email);
-    if (!user || await checkPassowrdHash(params.password, user.hashedPassword) === false) {
+    if (!user || await checkPasswordHash(params.password, user.hashedPassword) === false) {
         throw new UnauthorizedError("incorrect email or password");
     }
+
+    let duration = config.jwt.defaultDuration;
+    if(params.expiresInSeconds && !(params.expiresInSeconds > config.jwt.defaultDuration)) duration = config.jwt.defaultDuration;
 
     res.header("Content-Type", "application/json");
     res.status(200).send({
         id: user.id,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
-        email: user.email
+        email: user.email,
+        token: makeJWT(user.id, duration, config.jwt.secret)
     })
 }
