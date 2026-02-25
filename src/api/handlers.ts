@@ -1,8 +1,8 @@
 import { Response, Request } from "express";
 import { config } from "../config.js";
-import { BadRequestError, ForbiddenError } from "./errors.js";
+import { BadRequestError, ForbiddenError, NotFoundError } from "./errors.js";
 import { createUser, deleteUsers } from "../db/queries/users.js";
-import { createChirp } from "../db/queries/chirps.js";
+import { createChirp, getChirpById, getChirps } from "../db/queries/chirps.js";
 
 export async function handlerMetrics(_: Request, res: Response) {
     res.set("Content-Type", "text/html; charset=utf-8");
@@ -21,7 +21,7 @@ export async function handlerReadiness(_: Request, res: Response) {
 
 export async function handlerReset(_: Request, res: Response) {
     if(config.api.platform !== "dev") {
-        throw new ForbiddenError("Reset is onbly allowed in dev environment.");
+        throw new ForbiddenError("Reset is only allowed in dev environment.");
     }
     config.api.fileserverHits = 0;
     await deleteUsers();
@@ -59,6 +59,27 @@ export async function handlerAddChirp(req: Request, res: Response) {
         body: cleanedBody,
         userId: chirp.userId
      });
+}
+
+export async function handlerGetChirps(req: Request, res: Response) {
+    const rows = await getChirps();
+    res.header("Content-Type", "application/json");
+    res.status(200).send(rows);
+}
+
+export async function handlerGetChirpById(req: Request, res: Response, chirpId: string) {
+    const row = await getChirpById(chirpId)
+    if(!row) {
+        throw new NotFoundError(`Chirp with id ${chirpId} does not exist`);
+    }
+    res.header("Content-Type", "application/json");
+    res.status(200).send({
+        id: row.id,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        body: row.body,
+        userId: row.userId
+    });
 }
 
 export async function handlerAddUser(req: Request, res: Response) {
