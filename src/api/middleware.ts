@@ -19,23 +19,19 @@ export function middlewareMetricsInc(_: Request, __: Response, next: NextFunctio
 
 export function errorMiddleWare(err: Error, _: Request, res: Response, __: NextFunction) {
     let statusCode = 500;
-    let message = "Something went wrong on our end";
+    let message = `Something went wrong on our end`;
     if (err instanceof BadRequestError) {
         statusCode = 400;
         message = err.message;
-        console.log("ping");
     } else if (err instanceof UnauthorizedError) {
         statusCode = 401;
         message = err.message;
-        console.log("ping");
     } else if (err instanceof ForbiddenError) {
         statusCode = 403;
         message = err.message;
-        console.log("ping");
     } else if (err instanceof NotFoundError) {
         statusCode = 404;
         message = err.message;
-        console.log("ping");
     }
     console.log(err.message)
     res.header("Content-Type", "application/json");

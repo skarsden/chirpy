@@ -2,6 +2,7 @@ import { Response, Request } from "express";
 import { config } from "../config.js";
 import { BadRequestError, ForbiddenError } from "./errors.js";
 import { createUser, deleteUsers } from "../db/queries/users.js";
+import { createChirp } from "../db/queries/chirps.js";
 
 export async function handlerMetrics(_: Request, res: Response) {
     res.set("Content-Type", "text/html; charset=utf-8");
@@ -28,8 +29,11 @@ export async function handlerReset(_: Request, res: Response) {
     res.end();
 }
 
-export async function handlerValidate(req: Request, res: Response) {
-    const params: { body: string } = req.body;
+export async function handlerAddChirp(req: Request, res: Response) {
+    const params: { body: string, userId: string } = req.body;
+    if (!params.body || !params.userId) {
+        throw new BadRequestError("Missing required field");
+    }
     if (params.body.length > 140) {
         throw new BadRequestError("Chirp is too long. Max length is 140");
     }
@@ -42,8 +46,19 @@ export async function handlerValidate(req: Request, res: Response) {
     }
     const cleanedBody = words.join(" ");
 
+    const chirp = await createChirp({ body: cleanedBody, userId: params.userId});
+    if (!chirp) {
+        throw new Error("Could not create chirp");
+    }
+
     res.header("Content-Type", "application/json");
-    res.status(200).send({ cleanedBody: cleanedBody });
+    res.status(201).send({ 
+        id: chirp.id,
+        createdAt: chirp.createdAt,
+        updatedAt: chirp.updatedAt,
+        body: cleanedBody,
+        userId: chirp.userId
+     });
 }
 
 export async function handlerAddUser(req: Request, res: Response) {
