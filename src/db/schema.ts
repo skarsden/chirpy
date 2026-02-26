@@ -19,3 +19,14 @@ export const chirps = pgTable("chirps", {
 });
 
 export type NewChirp = typeof chirps.$inferInsert;
+
+export const refreshTokens = pgTable("refresh_table", {
+    token: varchar("token", { length: 256 }).primaryKey(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade"}).notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    revokedAt: timestamp("revoked_at")
+});
+
+export type NewToken = typeof refreshTokens.$inferInsert;

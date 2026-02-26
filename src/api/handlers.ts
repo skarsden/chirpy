@@ -3,8 +3,9 @@ import { config } from "../config.js";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors.js";
 import { createUser, deleteUsers, getUserByEmail } from "../db/queries/users.js";
 import { createChirp, getChirpById, getChirps } from "../db/queries/chirps.js";
-import { NewUser } from "src/db/schema.js";
-import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, validateJWT } from "./auth.js";
+import { NewUser } from "../db/schema.js";
+import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from "./auth.js";
+import { revokeRefreshToken, saveRefreshToken, userForRefreshToken } from "../db/queries/refresh.js";
 
 export async function handlerMetrics(_: Request, res: Response) {
     res.set("Content-Type", "text/html; charset=utf-8");
@@ -112,7 +113,7 @@ export async function handlerAddUser(req: Request, res: Response) {
 }
 
 export async function handlerLogin(req: Request, res: Response) {
-    const params: { email: string, password: string, expiresInSeconds?: number } = req.body;
+    const params: { email: string, password: string } = req.body;
     if (!params.email || !params.password) {
         throw new BadRequestError("Missing required fields")
     }
@@ -122,8 +123,13 @@ export async function handlerLogin(req: Request, res: Response) {
         throw new UnauthorizedError("incorrect email or password");
     }
 
-    let duration = config.jwt.defaultDuration;
-    if(params.expiresInSeconds && !(params.expiresInSeconds > config.jwt.defaultDuration)) duration = config.jwt.defaultDuration;
+    const accessToken = makeJWT(user.id, config.jwt.defaultDuration, config.jwt.secret);
+    const refreshToken = makeRefreshToken();
+
+    const saved = await saveRefreshToken(user.id, refreshToken);
+    if (!saved) {
+        throw new UnauthorizedError("Could not save refresh token");
+    }
 
     res.header("Content-Type", "application/json");
     res.status(200).send({
@@ -131,6 +137,28 @@ export async function handlerLogin(req: Request, res: Response) {
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         email: user.email,
-        token: makeJWT(user.id, duration, config.jwt.secret)
-    })
+        token: accessToken,
+        refreshToken: refreshToken
+    });
+}
+
+export async function handlerRefresh(req: Request, res: Response) {
+    let refreshToken = getBearerToken(req);
+
+    const result = await userForRefreshToken(refreshToken);
+    if (!result) {
+        throw new UnauthorizedError("invalid refesh token");
+    }
+
+    const user = result.user;
+    const accessToken = makeJWT(user.id, config.jwt.defaultDuration, config.jwt.secret);
+    
+    res.header("Content-Type", "application/json");
+    res.status(200).send({ token: accessToken });
+}
+
+export async function handlerRevoke(req: Request, res: Response) {
+    const refreshToken = getBearerToken(req);
+    await revokeRefreshToken(refreshToken);
+    res.status(204).send();
 }

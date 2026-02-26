@@ -20,7 +20,8 @@ type DBConfig = {
 type JwtConfig = {
     defaultDuration: number,
     issuer: string,
-    secret: string
+    secret: string,
+    refreshDuration: number
 }
 
 process.loadEnvFile();
@@ -40,9 +41,10 @@ export const config: Config = {
         migrationConfig: migrationConfig,
     },
     jwt: {
-        defaultDuration: 3600,
+        defaultDuration: 3600, // 1 hour in seconds
         secret: envOrThrow("SECRET"),
-        issuer: "chirpy"
+        issuer: "chirpy",
+        refreshDuration: 60 * 60 * 24 * 1000 //60 days in milliseconds
     }
  };
 

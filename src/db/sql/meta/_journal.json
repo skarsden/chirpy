@@ -36,6 +36,13 @@
       "when": 1772046584070,
       "tag": "0004_high_vision",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1772128158409,
+      "tag": "0005_next_madrox",
+      "breakpoints": true
     }
   ]
 }
